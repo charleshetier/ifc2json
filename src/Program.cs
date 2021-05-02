@@ -10,7 +10,7 @@ using System.Linq;
 
 namespace ConvertIfc2Json
 {
-    class Program
+    public class Program
     {
         public static int Main(string[] args)
         {
@@ -143,7 +143,7 @@ namespace ConvertIfc2Json
                                 // Extract Pset
                                 try
                                 {
-                                    extractPset(ref newSite, site);
+                                    site.ExtractPset(newSite);
                                 }
                                 catch (System.Exception ex)
                                 {
@@ -187,7 +187,7 @@ namespace ConvertIfc2Json
 
 
                                         // Extract Pset
-                                        extractPset(ref newBuildind, building);
+                                        building.ExtractPset(newBuildind);
 
                                         // building Address
                                         try
@@ -282,7 +282,7 @@ namespace ConvertIfc2Json
                                                     newElementProd.userData.buildingStorey = sIds.ToArray();
 
                                                     // Extract pset
-                                                    extractPset(ref newElementProd, product);
+                                                    product.ExtractPset(newElementProd);
                                                     double spaceCounter = 0;
 
                                                     // Link to the Space
@@ -711,7 +711,7 @@ namespace ConvertIfc2Json
 
 
                                                     // Extract pset
-                                                    extractPset(ref newElement, element);
+                                                    element.ExtractPset(newElement);
 
                                                     // Add to list
                                                     outputElements.Add(newElement);
@@ -791,40 +791,7 @@ namespace ConvertIfc2Json
             return returnMessage;
         }
 
-        public static void extractPsetBase(this IfcObject element, JsonIfcElement newElement, string logId = null)
-        {
-            if (element.IsDefinedBy != null && element.IsDefinedBy.Count > 0)
-            {
-                foreach (var psv in element.IsDefinedBy
-                    .OfType<IfcPropertySet>()
-                    .SelectMany(pset => pset.HasProperties
-                    .Select(tuple => tuple.Value)
-                    .OfType<IfcPropertySingleValue>()))
-                {
-                    try
-                    {
-                        if (psv.Name != null && psv.NominalValue.ValueString != null
-                            && !newElement.userData.pset.ContainsKey(psv.Name))
-                        {
-                            newElement.userData.pset.Add(psv.Name, psv.NominalValue.ValueString);
-                        }
-                    }
-                    catch (Exception e)
-                    {
-                        if(logId != null) Console.WriteLine($"{logId}. Pset write error {e.Message}");
-                    }
-
-                }
-
-            }
-
-        }
-
-        static void extractPset(ref JsonIfcElement newElement, IfcSite element) => extractPsetBase(element, newElement, logId: "21");
-        static void extractPset(ref JsonIfcElement newElement, IfcProduct element) => extractPsetBase(element, newElement);
-        static void extractPset(ref JsonIfcElement newElement, IfcBuilding element) => extractPsetBase(element, newElement, logId: "23");
-        static void extractPset(ref JsonIfcElement newElement, IfcBuildingElementProxy element) => extractPsetBase(element, newElement, logId: "24");
-        static void extractPset(ref JsonIfcElement newElement, IfcBuildingStorey element) => extractPsetBase(element, newElement, logId: "25");
+        
 
         enum ExitCode : int
         {
@@ -843,7 +810,7 @@ namespace ConvertIfc2Json
             public geoFeature boundary { get; set; }
         }
 
-        internal class JsonIfcUserData
+        public class JsonIfcUserData
         {
             public string name { get; set; }
             public string type { get; set; }
@@ -899,9 +866,6 @@ namespace ConvertIfc2Json
             public string type { get; set; }
             public IList<IList<IList<double>>> coordinates { get; set; }
         }
-
-
-
     }
 }
 
