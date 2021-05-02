@@ -4,8 +4,9 @@ using System.IO;
 using GeometryGym.Ifc;
 using MathNet.Spatial.Euclidean;
 using MathNet.Numerics;
+using System.IO;
 using MathNet.Numerics.LinearAlgebra;
-
+using System.Linq;
 
 namespace ConvertIfc2Json
 {
@@ -14,14 +15,14 @@ namespace ConvertIfc2Json
         public static int Main(string[] args)
         {
 
-            int returnMessage = (int)ExitCode.Success;
-            List<JsonIfcElement> outputElements = new List<JsonIfcElement>();
-            string pathSource = "";
-            string pathDest = "";
-            bool activeComptactJson = true;
-            bool readVersion = false;
-            bool activeFullJson = false;
-            double SCALE = 1;
+            var returnMessage = (int)ExitCode.Success;
+            var outputElements = new List<JsonIfcElement>();
+            var pathSource = string.Empty;
+            var pathDest = string.Empty;
+            var activeComptactJson = true;
+            var readVersion = false;
+            var activeFullJson = false;
+            var SCALE = 1.0;
 
             try
             {
@@ -31,28 +32,28 @@ namespace ConvertIfc2Json
                     if (arg.ToLower().Trim() == "--version") readVersion = true;
                     if (arg.ToLower().Trim() == "--indented") activeComptactJson = false;
                     if (arg.ToLower().Trim() == "--full") activeFullJson = true;
-                    if (arg.Substring(0, 2) != "--" && pathSource != "" && pathDest == "") pathDest = arg;
-                    if (arg.Substring(0, 2) != "--" && pathSource == "") pathSource = arg;
+                    if (arg.Substring(0, 2) != "--" && pathSource != string.Empty && pathDest == string.Empty) pathDest = arg;
+                    if (arg.Substring(0, 2) != "--" && pathSource == string.Empty) pathSource = arg;
 
                 }
 
                 if (readVersion)
                 {
-                    string version = System.Reflection.Assembly.GetExecutingAssembly().GetName().Version.ToString();
-                    Console.WriteLine("1. ConvertIfc2Json : " + version + Environment.NewLine + "(.Net version " + typeof(string).Assembly.ImageRuntimeVersion + ")");
+                    var version = System.Reflection.Assembly.GetExecutingAssembly().GetName().Version.ToString();
+                    Console.WriteLine($"1. ConvertIfc2Json : {version}{Environment.NewLine}(.Net version {typeof(string).Assembly.ImageRuntimeVersion})");
                     return returnMessage;
                 }
 
 
 
-                if (System.IO.File.Exists(pathSource))
+                if (File.Exists(pathSource))
                 {
-                    if (pathDest == "") pathDest = pathSource + ".json";
-                    DatabaseIfc db = new DatabaseIfc();
+                    if (pathDest == string.Empty) pathDest = pathSource + ".json";
+                    var db = new DatabaseIfc();
                     IfcProject project;
-                    String projectId = "";
-                    List<IfcSite> sites = new List<IfcSite>();
-                    List<IfcBuilding> buildings = new List<IfcBuilding>();
+                    var projectId = "";
+                    var sites = new List<IfcSite>();
+                    var buildings = new List<IfcBuilding>();
 
                     try
                     {
@@ -65,88 +66,20 @@ namespace ConvertIfc2Json
                         // IFC Project
                         try
                         {
-                            JsonIfcElement newProject = new JsonIfcElement();
+                            var newProject = new JsonIfcElement();
                             if (project.GlobalId != null)
                             {
+                                // REVIEW ne semble pas servir
+                                //foreach (var unit in project.UnitsInContext.Units)
+                                //{
+                                //    var u = project.UnitsInContext.Extract<IfcSIUnit>();
+                                //    // Console.WriteLine("2." + unit.StepClassName);
+                                //}
+
+                                // Computing the json conversion scale from current Geogym project
+                                SCALE = project.GetJsonConversionScale();
+
                                 newProject.id = project.GlobalId;
-                                foreach (IfcUnit unit in project.UnitsInContext.Units)
-                                {
-                                    List<IfcSIUnit> u = project.UnitsInContext.Extract<IfcSIUnit>();
-                                    // Console.WriteLine("2." + unit.StepClassName);
-                                }
-
-                                // Check units
-                                foreach (IfcUnit unit in project.UnitsInContext.Units)
-                                {
-                                    if (unit.StepClassName == "IfcSIUnit")
-                                    {
-                                        IfcSIUnit u = unit as IfcSIUnit;
-                                        if (u.UnitType == IfcUnitEnum.LENGTHUNIT)
-                                        {
-                                            if (u.Name == IfcSIUnitName.METRE)
-                                            {
-
-                                                IfcSIPrefix p = u.Prefix;
-                                                switch (p)
-                                                {
-                                                    case IfcSIPrefix.EXA:
-                                                        SCALE = Math.Pow(10, -18);
-                                                        break;
-                                                    case IfcSIPrefix.PETA:
-                                                        SCALE = Math.Pow(10, -15);
-                                                        break;
-                                                    case IfcSIPrefix.TERA:
-                                                        SCALE = Math.Pow(10, -12);
-                                                        break;
-                                                    case IfcSIPrefix.GIGA:
-                                                        SCALE = Math.Pow(10, -9);
-                                                        break;
-                                                    case IfcSIPrefix.MEGA:
-                                                        SCALE = Math.Pow(10, -6);
-                                                        break;
-                                                    case IfcSIPrefix.KILO:
-                                                        SCALE = Math.Pow(10, -3);
-                                                        break;
-                                                    case IfcSIPrefix.HECTO:
-                                                        SCALE = Math.Pow(10, -2);
-                                                        break;
-                                                    case IfcSIPrefix.DECA:
-                                                        SCALE = 10;
-                                                        break;
-                                                    case IfcSIPrefix.DECI:
-                                                        SCALE = Math.Pow(10, 1);
-                                                        break;
-                                                    case IfcSIPrefix.CENTI:
-                                                        SCALE = Math.Pow(10, 2);
-                                                        break;
-                                                    case IfcSIPrefix.MILLI:
-                                                        SCALE = Math.Pow(10, 3);
-                                                        break;
-                                                    case IfcSIPrefix.MICRO:
-                                                        SCALE = Math.Pow(10, 6);
-                                                        break;
-                                                    case IfcSIPrefix.NANO:
-                                                        SCALE = Math.Pow(10, 9);
-                                                        break;
-                                                    case IfcSIPrefix.PICO:
-                                                        SCALE = Math.Pow(10, 12);
-                                                        break;
-                                                    case IfcSIPrefix.FEMTO:
-                                                        SCALE = Math.Pow(10, 15);
-                                                        break;
-                                                    case IfcSIPrefix.ATTO:
-                                                        SCALE = Math.Pow(10, 18);
-                                                        break;
-                                                    default:
-                                                        SCALE = 1;
-                                                        break;
-                                                }
-                                                break;
-                                            }
-                                        }
-
-                                    }
-                                }
 
                                 projectId = newProject.id;
                                 newProject.userData = new JsonIfcUserData();
@@ -159,7 +92,7 @@ namespace ConvertIfc2Json
 
                             }
                         }
-                        catch (System.Exception ex)
+                        catch (Exception ex)
                         {
                             Console.WriteLine("3. Element read error " + ex.Message);
                             returnMessage = (int)ExitCode.UnknownError;
@@ -167,7 +100,7 @@ namespace ConvertIfc2Json
 
 
                     }
-                    catch (System.Exception ex)
+                    catch (Exception ex)
                     {
 
                         Console.WriteLine("31. Write file : " + ex.Message);
@@ -177,12 +110,11 @@ namespace ConvertIfc2Json
 
 
                     // IFC Site
-                    foreach (IfcSite site in sites)
+                    foreach (var site in sites)
                     {
-
                         try
                         {
-                            JsonIfcElement newSite = new JsonIfcElement();
+                            var newSite = new JsonIfcElement();
                             if (site.GlobalId != null)
                             {
                                 newSite.id = site.GlobalId;
@@ -219,9 +151,9 @@ namespace ConvertIfc2Json
                                 }
 
                                 // Add Matrix
-                                List<IfcObjectPlacement> sObjectPlacements = site.ObjectPlacement.Extract<IfcObjectPlacement>();
-                                List<IfcLocalPlacement> sLocalPlacements = sObjectPlacements[0].Extract<IfcLocalPlacement>();
-                                IfcAxis2Placement3D sPos = sLocalPlacements[0].RelativePlacement as IfcAxis2Placement3D;
+                                var sObjectPlacements = site.ObjectPlacement.Extract<IfcObjectPlacement>();
+                                var sLocalPlacements = sObjectPlacements[0].Extract<IfcLocalPlacement>();
+                                var sPos = sLocalPlacements[0].RelativePlacement as IfcAxis2Placement3D;
                                 if (sPos.Location != null) newSite.userData.location = sPos.Location.Coordinates[0] / SCALE + "," + sPos.Location.Coordinates[1] / SCALE + "," + sPos.Location.Coordinates[2] / SCALE;
                                 if (sPos.RefDirection != null) newSite.userData.refDirection = sPos.RefDirection.DirectionRatios[0] + "," + sPos.RefDirection.DirectionRatios[1] + "," + sPos.RefDirection.DirectionRatios[2];
                                 if (sPos.Axis != null) newSite.userData.axis = sPos.Axis.DirectionRatios[0] + "," + sPos.Axis.DirectionRatios[1] + "," + sPos.Axis.DirectionRatios[2];
@@ -230,9 +162,9 @@ namespace ConvertIfc2Json
 
                                 // IFC Building
                                 buildings = site.Extract<IfcBuilding>();
-                                foreach (IfcBuilding building in buildings)
+                                foreach (var building in buildings)
                                 {
-                                    JsonIfcElement newBuildind = new JsonIfcElement();
+                                    var newBuildind = new JsonIfcElement();
                                     if (building.GlobalId != null)
                                     {
                                         newBuildind.id = building.GlobalId;
@@ -246,8 +178,8 @@ namespace ConvertIfc2Json
 
 
                                         // Add Matrix
-                                        List<IfcObjectPlacement> bObjectPlacements = building.ObjectPlacement.Extract<IfcObjectPlacement>();
-                                        List<IfcLocalPlacement> bLocalPlacements = bObjectPlacements[0].Extract<IfcLocalPlacement>();
+                                        var bObjectPlacements = building.ObjectPlacement.Extract<IfcObjectPlacement>();
+                                        var bLocalPlacements = bObjectPlacements[0].Extract<IfcLocalPlacement>();
                                         IfcAxis2Placement3D bPos = bLocalPlacements[0].RelativePlacement as IfcAxis2Placement3D;
                                         if (bPos.Location != null) newBuildind.userData.location = bPos.Location.Coordinates[0] / SCALE + "," + bPos.Location.Coordinates[1] / SCALE + "," + bPos.Location.Coordinates[2] / SCALE;
                                         if (bPos.RefDirection != null) newBuildind.userData.refDirection = bPos.RefDirection.DirectionRatios[0] + "," + bPos.RefDirection.DirectionRatios[1] + "," + bPos.RefDirection.DirectionRatios[2];
@@ -291,7 +223,7 @@ namespace ConvertIfc2Json
                                     List<IfcBuildingStorey> buildingStoreys = building.Extract<IfcBuildingStorey>();
                                     foreach (IfcBuildingStorey buildingStorey in buildingStoreys)
                                     {
-                                        JsonIfcElement storeyElement = new JsonIfcElement();
+                                        var storeyElement = new JsonIfcElement();
                                         storeyElement.id = buildingStorey.GlobalId;
                                         storeyElement.userData = new JsonIfcUserData();
                                         storeyElement.userData.projectId = projectId;
@@ -795,20 +727,9 @@ namespace ConvertIfc2Json
                                             }
 
                                         }
-
-
                                     }
-
-
-
-
-
                                 }
-
-
                             }
-
-
                         }
                         catch (System.Exception ex)
                         {
@@ -870,39 +791,27 @@ namespace ConvertIfc2Json
             return returnMessage;
         }
 
-
-        static void extractPset(ref JsonIfcElement newElement, IfcSite element)
+        public static void extractPsetBase(this IfcObject element, JsonIfcElement newElement, string logId = null)
         {
-
             if (element.IsDefinedBy != null && element.IsDefinedBy.Count > 0)
             {
-                foreach (IfcRelDefinesByProperties rdp in element.IsDefinedBy)
+                foreach (var psv in element.IsDefinedBy
+                    .OfType<IfcPropertySet>()
+                    .SelectMany(pset => pset.HasProperties
+                    .Select(tuple => tuple.Value)
+                    .OfType<IfcPropertySingleValue>()))
                 {
-                    IfcPropertySet pset = rdp.RelatingPropertyDefinition as IfcPropertySet;
-                    if (pset == null) continue;
-
-                    foreach (System.Collections.Generic.KeyValuePair<string, IfcProperty> pair in pset.HasProperties)
+                    try
                     {
-                        IfcPropertySingleValue psv = pair.Value as IfcPropertySingleValue;
-                        if (psv == null) continue;
-                        try
+                        if (psv.Name != null && psv.NominalValue.ValueString != null
+                            && !newElement.userData.pset.ContainsKey(psv.Name))
                         {
-                            if (psv.Name != null && psv.NominalValue.ValueString != null)
-                            {
-
-                                if (newElement.userData.pset.ContainsKey(psv.Name) != true)
-                                {
-                                    newElement.userData.pset.Add(psv.Name, psv.NominalValue.ValueString);
-                                }
-
-
-                            }
+                            newElement.userData.pset.Add(psv.Name, psv.NominalValue.ValueString);
                         }
-                        catch (System.Exception ex2)
-                        {
-                            Console.WriteLine("21. Pset write error" + ex2.Message);
-                        }
-
+                    }
+                    catch (Exception e)
+                    {
+                        if(logId != null) Console.WriteLine($"{logId}. Pset write error {e.Message}");
                     }
 
                 }
@@ -910,156 +819,12 @@ namespace ConvertIfc2Json
             }
 
         }
-        static void extractPset(ref JsonIfcElement newElement, IfcProduct element)
-        {
 
-            if (element.IsDefinedBy != null && element.IsDefinedBy.Count > 0)
-            {
-                foreach (IfcRelDefinesByProperties rdp in element.IsDefinedBy)
-                {
-                    IfcPropertySet pset = rdp.RelatingPropertyDefinition as IfcPropertySet;
-                    if (pset == null) continue;
-
-                    foreach (System.Collections.Generic.KeyValuePair<string, IfcProperty> pair in pset.HasProperties)
-                    {
-                        IfcPropertySingleValue psv = pair.Value as IfcPropertySingleValue;
-                        if (psv == null) continue;
-                        try
-                        {
-                            if (psv.Name != null && psv.NominalValue.ValueString != null)
-                            {
-
-                                if (newElement.userData.pset.ContainsKey(psv.Name) != true)
-                                {
-                                    newElement.userData.pset.Add(psv.Name, psv.NominalValue.ValueString);
-                                }
-                            }
-                        }
-                        catch (System.Exception ex2)
-                        {
-                            string errMessage = ex2.Message;
-                            // Console.WriteLine("22. Pset write error" + ex2.Message);
-                        }
-
-                    }
-
-                }
-
-            }
-
-        }
-        static void extractPset(ref JsonIfcElement newElement, IfcBuilding element)
-        {
-
-            if (element.IsDefinedBy != null && element.IsDefinedBy.Count > 0)
-            {
-                foreach (IfcRelDefinesByProperties rdp in element.IsDefinedBy)
-                {
-                    IfcPropertySet pset = rdp.RelatingPropertyDefinition as IfcPropertySet;
-                    if (pset == null) continue;
-
-                    foreach (System.Collections.Generic.KeyValuePair<string, IfcProperty> pair in pset.HasProperties)
-                    {
-                        IfcPropertySingleValue psv = pair.Value as IfcPropertySingleValue;
-                        if (psv == null) continue;
-                        try
-                        {
-                            if (psv.Name != null && psv.NominalValue.ValueString != null)
-                            {
-
-                                if (newElement.userData.pset.ContainsKey(psv.Name) != true)
-                                {
-                                    newElement.userData.pset.Add(psv.Name, psv.NominalValue.ValueString);
-                                }
-
-                            }
-
-                        }
-                        catch (System.Exception ex2)
-                        {
-                            Console.WriteLine("23. Pset write error" + ex2.Message);
-                        }
-                    }
-                }
-
-            }
-
-        }
-        static void extractPset(ref JsonIfcElement newElement, IfcBuildingElementProxy element)
-        {
-
-            if (element.IsDefinedBy != null && element.IsDefinedBy.Count > 0)
-            {
-                foreach (IfcRelDefinesByProperties rdp in element.IsDefinedBy)
-                {
-                    IfcPropertySet pset = rdp.RelatingPropertyDefinition as IfcPropertySet;
-                    if (pset == null) continue;
-
-                    foreach (System.Collections.Generic.KeyValuePair<string, IfcProperty> pair in pset.HasProperties)
-                    {
-                        IfcPropertySingleValue psv = pair.Value as IfcPropertySingleValue;
-                        if (psv == null) continue;
-                        try
-                        {
-                            if (psv.Name != null && psv.NominalValue.ValueString != null)
-                            {
-
-                                if (newElement.userData.pset.ContainsKey(psv.Name) != true)
-                                {
-                                    newElement.userData.pset.Add(psv.Name, psv.NominalValue.ValueString);
-                                }
-
-                            }
-                        }
-                        catch (System.Exception ex2)
-                        {
-                            Console.WriteLine("24. Pset write error" + ex2.Message);
-                        }
-                    }
-
-                }
-
-            }
-
-        }
-        
-        static void extractPset(ref JsonIfcElement newElement, IfcBuildingStorey element)
-        {
-
-            if (element.IsDefinedBy != null && element.IsDefinedBy.Count > 0)
-            {
-                foreach (IfcRelDefinesByProperties rdp in element.IsDefinedBy)
-                {
-                    IfcPropertySet pset = rdp.RelatingPropertyDefinition as IfcPropertySet;
-                    if (pset == null) continue;
-
-                    foreach (System.Collections.Generic.KeyValuePair<string, IfcProperty> pair in pset.HasProperties)
-                    {
-                        IfcPropertySingleValue psv = pair.Value as IfcPropertySingleValue;
-                        if (psv == null) continue;
-                        try
-                        {
-                            if (psv.Name != null && psv.NominalValue.ValueString != null)
-                            {
-
-                                if (newElement.userData.pset.ContainsKey(psv.Name) != true)
-                                {
-                                    newElement.userData.pset.Add(psv.Name, psv.NominalValue.ValueString);
-                                }
-
-                            }
-                        }
-                        catch (System.Exception ex2)
-                        {
-                            Console.WriteLine("25. Pset write error (id: " + element.GlobalId + ") " + ex2.Message);
-                        }
-                    }
-
-                }
-
-            }
-
-        }
+        static void extractPset(ref JsonIfcElement newElement, IfcSite element) => extractPsetBase(element, newElement, logId: "21");
+        static void extractPset(ref JsonIfcElement newElement, IfcProduct element) => extractPsetBase(element, newElement);
+        static void extractPset(ref JsonIfcElement newElement, IfcBuilding element) => extractPsetBase(element, newElement, logId: "23");
+        static void extractPset(ref JsonIfcElement newElement, IfcBuildingElementProxy element) => extractPsetBase(element, newElement, logId: "24");
+        static void extractPset(ref JsonIfcElement newElement, IfcBuildingStorey element) => extractPsetBase(element, newElement, logId: "25");
 
         enum ExitCode : int
         {
@@ -1070,8 +835,8 @@ namespace ConvertIfc2Json
             UnknownError = 10,
         }
 
-  
-        internal class JsonIfcElement
+
+        public class JsonIfcElement
         {
             public string id { get; set; }
             public JsonIfcUserData userData { get; set; }

@@ -6,12 +6,12 @@
     <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
   </PropertyGroup>
   <ItemGroup>
-    <None Include=".gitignore"/>
+    <None Include=".gitignore" />
   </ItemGroup>
   <ItemGroup>
-    <PackageReference Include="Newtonsoft.Json" Version="12.0.3"/>
-    <PackageReference Include="MathNet.Spatial" Version="*"/>
-    <PackageReference Include="MathNet.Numerics" Version="*"/>
+    <PackageReference Include="Newtonsoft.Json" Version="12.0.3" />
+    <PackageReference Include="MathNet.Spatial" Version="*" />
+    <PackageReference Include="MathNet.Numerics" Version="*" />
   </ItemGroup>
   <ItemGroup>
     <Reference Include="GeometryGymIFCcore">
