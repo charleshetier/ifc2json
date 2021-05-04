@@ -7,6 +7,7 @@ using MathNet.Numerics;
 using System.IO;
 using MathNet.Numerics.LinearAlgebra;
 using System.Linq;
+using ConvertIfc2Json.Models;
 
 namespace ConvertIfc2Json
 {
@@ -22,7 +23,9 @@ namespace ConvertIfc2Json
             var activeComptactJson = true;
             var readVersion = false;
             var activeFullJson = false;
-            var SCALE = 1.0;
+            //var SCALE = 1.0;
+            var context = new JsonConversionContext();
+            JsonProjectIfcElement newProject = null;
 
             try
             {
@@ -66,7 +69,6 @@ namespace ConvertIfc2Json
                         // IFC Project
                         try
                         {
-                            var newProject = new JsonIfcElement();
                             if (project.GlobalId != null)
                             {
                                 // REVIEW ne semble pas servir
@@ -77,20 +79,13 @@ namespace ConvertIfc2Json
                                 //}
 
                                 // Computing the json conversion scale from current Geogym project
-                                SCALE = project.GetJsonConversionScale();
+                                context.SCALE = project.GetJsonConversionScale();
+                                projectId = project.GlobalId;
 
-                                newProject.id = project.GlobalId;
-
-                                projectId = newProject.id;
-                                newProject.userData = new JsonIfcUserData();
-                                newProject.userData.pset = new Dictionary<string, string>();
-                                if (project.Name != null) newProject.userData.name = project.Name;
-                                if (project.ObjectType != null) newProject.userData.objectType = project.ObjectType;
-                                if (project.StepClassName != null) newProject.userData.type = project.StepClassName;
-
-                                outputElements.Add(newProject);
 
                             }
+
+                            outputElements.Add(newProject = new JsonProjectIfcElement(project));
                         }
                         catch (Exception ex)
                         {
@@ -114,184 +109,52 @@ namespace ConvertIfc2Json
                     {
                         try
                         {
-                            var newSite = new JsonIfcElement();
                             if (site.GlobalId != null)
                             {
-                                newSite.id = site.GlobalId;
-                                newSite.userData = new JsonIfcUserData();
-                                newSite.userData.projectId = projectId;
-                                newSite.userData.pset = new Dictionary<string, string>();
-                                if (site.Name != null) newSite.userData.name = site.Name;
-                                if (site.ObjectType != null) newSite.userData.objectType = site.ObjectType;
-                                if (site.StepClassName != null) newSite.userData.type = site.StepClassName;
-
-                                if (site.RefLatitude != null) if (newSite.userData.pset.ContainsKey("RefLatitude") != true)
-                                    {
-                                        IfcCompoundPlaneAngleMeasure Lat = site.RefLatitude;
-                                        newSite.userData.pset.Add("RefLatitude", Lat.ToSTEP().ToString());
-                                    }
-
-                                if (site.RefLongitude != null) if (newSite.userData.pset.ContainsKey("RefLongitude") != true)
-                                    {
-                                        IfcCompoundPlaneAngleMeasure Long = site.RefLongitude;
-                                        newSite.userData.pset.Add("RefLongitude", Long.ToSTEP().ToString());
-                                    }
-
-                                if (site.RefElevation != 0) if (newSite.userData.pset.ContainsKey("RefElevation") != true)
-                                        newSite.userData.pset.Add("RefElevation", Convert.ToString(site.RefElevation));
-
-                                // Extract Pset
-                                try
-                                {
-                                    site.ExtractPset(newSite);
-                                }
-                                catch (System.Exception ex)
-                                {
-                                    Console.WriteLine("4. Site pset error : " + ex.Message);
-                                }
-
-                                // Add Matrix
-                                var sObjectPlacements = site.ObjectPlacement.Extract<IfcObjectPlacement>();
-                                var sLocalPlacements = sObjectPlacements[0].Extract<IfcLocalPlacement>();
-                                var sPos = sLocalPlacements[0].RelativePlacement as IfcAxis2Placement3D;
-                                if (sPos.Location != null) newSite.userData.location = sPos.Location.Coordinates[0] / SCALE + "," + sPos.Location.Coordinates[1] / SCALE + "," + sPos.Location.Coordinates[2] / SCALE;
-                                if (sPos.RefDirection != null) newSite.userData.refDirection = sPos.RefDirection.DirectionRatios[0] + "," + sPos.RefDirection.DirectionRatios[1] + "," + sPos.RefDirection.DirectionRatios[2];
-                                if (sPos.Axis != null) newSite.userData.axis = sPos.Axis.DirectionRatios[0] + "," + sPos.Axis.DirectionRatios[1] + "," + sPos.Axis.DirectionRatios[2];
-
+                                var newSite = new JsonSiteIfcElement(site, newProject, context);
                                 outputElements.Add(newSite);
 
                                 // IFC Building
                                 buildings = site.Extract<IfcBuilding>();
                                 foreach (var building in buildings)
                                 {
-                                    var newBuildind = new JsonIfcElement();
+                                    var newBuildind = new JsonBuildingIfcElement(building, newSite, context); // REVIEW don't create this unused instance if global id is null
                                     if (building.GlobalId != null)
                                     {
-                                        newBuildind.id = building.GlobalId;
-                                        newBuildind.userData = new JsonIfcUserData();
-                                        newBuildind.userData.projectId = projectId;
-                                        newBuildind.userData.siteId = site.GlobalId;
-                                        newBuildind.userData.pset = new Dictionary<string, string>();
-                                        if (building.Name != null) newBuildind.userData.name = building.Name;
-                                        if (building.ObjectType != null) newBuildind.userData.objectType = building.ObjectType;
-                                        if (building.StepClassName != null) newBuildind.userData.type = building.StepClassName;
-
-
-                                        // Add Matrix
-                                        var bObjectPlacements = building.ObjectPlacement.Extract<IfcObjectPlacement>();
-                                        var bLocalPlacements = bObjectPlacements[0].Extract<IfcLocalPlacement>();
-                                        IfcAxis2Placement3D bPos = bLocalPlacements[0].RelativePlacement as IfcAxis2Placement3D;
-                                        if (bPos.Location != null) newBuildind.userData.location = bPos.Location.Coordinates[0] / SCALE + "," + bPos.Location.Coordinates[1] / SCALE + "," + bPos.Location.Coordinates[2] / SCALE;
-                                        if (bPos.RefDirection != null) newBuildind.userData.refDirection = bPos.RefDirection.DirectionRatios[0] + "," + bPos.RefDirection.DirectionRatios[1] + "," + bPos.RefDirection.DirectionRatios[2];
-                                        if (bPos.Axis != null) newBuildind.userData.axis = bPos.Axis.DirectionRatios[0] + "," + bPos.Axis.DirectionRatios[1] + "," + bPos.Axis.DirectionRatios[2];
-
-
-                                        // Extract Pset
-                                        building.ExtractPset(newBuildind);
-
-                                        // building Address
-                                        try
-                                        {
-                                            if (building.BuildingAddress != null)
-                                            {
-                                                if (building.BuildingAddress.AddressLines.Count > 0)
-                                                {
-                                                    for (int i = 0; i < building.BuildingAddress.AddressLines.Count; i++)
-                                                    {
-                                                        double index = i + 1;
-                                                        newBuildind.userData.pset.Add("AddressLine" + index.ToString(), building.BuildingAddress.AddressLines[i]);
-                                                    }
-                                                }
-                                                if (building.BuildingAddress.PostalBox != "") newBuildind.userData.pset.Add("PostalBox", building.BuildingAddress.PostalBox);
-                                                if (building.BuildingAddress.PostalCode != "") newBuildind.userData.pset.Add("PostalCode", building.BuildingAddress.PostalCode);
-                                                if (building.BuildingAddress.Town != "") newBuildind.userData.pset.Add("Town", building.BuildingAddress.Town);
-                                                if (building.BuildingAddress.Region != "") newBuildind.userData.pset.Add("Region", building.BuildingAddress.Region);
-                                                if (building.BuildingAddress.Country != "") newBuildind.userData.pset.Add("Country", building.BuildingAddress.Country);
-                                            }
-
-                                        }
-                                        catch (System.Exception ex)
-                                        {
-                                            Console.WriteLine("5. Buildind Adresse (id: " + newBuildind.id + ") : " + ex.Message);
-                                        }
-
-
                                         outputElements.Add(newBuildind);
                                     }
 
                                     // IFC Building Storey // Levels
-                                    List<IfcBuildingStorey> buildingStoreys = building.Extract<IfcBuildingStorey>();
-                                    foreach (IfcBuildingStorey buildingStorey in buildingStoreys)
+                                    var buildingStoreys = building.Extract<IfcBuildingStorey>();
+                                    foreach (var buildingStorey in buildingStoreys)
                                     {
-                                        var storeyElement = new JsonIfcElement();
-                                        storeyElement.id = buildingStorey.GlobalId;
-                                        storeyElement.userData = new JsonIfcUserData();
-                                        storeyElement.userData.projectId = projectId;
-                                        storeyElement.userData.siteId = site.GlobalId;
-                                        storeyElement.userData.buildingId = building.GlobalId;
-                                        // storeyElement.userData.objectType = buildingStorey.objectType;
-                                        storeyElement.userData.type = "IfcBuildingStorey";
-                                        storeyElement.userData.name = buildingStorey.LongName;
-                                        storeyElement.userData.pset = new Dictionary<string, string>();
-                                        // Extract Pset
-                                        // extractPset(ref storeyElement, buildingStorey);
-                                        if (storeyElement.userData.pset.ContainsKey("Elevation") != true) storeyElement.userData.pset.Add("Elevation", (buildingStorey.Elevation / SCALE).ToString());
-
-                                        // Add Matrix
-                                        List<IfcObjectPlacement> bsObjectPlacements = buildingStorey.ObjectPlacement.Extract<IfcObjectPlacement>();
-                                        List<IfcLocalPlacement> bsLocalPlacements = bsObjectPlacements[0].Extract<IfcLocalPlacement>();
-                                        IfcAxis2Placement3D bsPos = bsLocalPlacements[0].RelativePlacement as IfcAxis2Placement3D;
-                                        if (bsPos.Location != null) newBuildind.userData.location = bsPos.Location.Coordinates[0] / SCALE + "," + bsPos.Location.Coordinates[1] / SCALE + "," + bsPos.Location.Coordinates[2] / SCALE;
-                                        if (bsPos.RefDirection != null) newBuildind.userData.refDirection = bsPos.RefDirection.DirectionRatios[0] + "," + bsPos.RefDirection.DirectionRatios[1] + "," + bsPos.RefDirection.DirectionRatios[2];
-                                        if (bsPos.Axis != null) newBuildind.userData.axis = bsPos.Axis.DirectionRatios[0] + "," + bsPos.Axis.DirectionRatios[1] + "," + bsPos.Axis.DirectionRatios[2];
-
+                                        var storeyElement = new JsonStoreyIfcElement(buildingStorey, newBuildind, context);
                                         outputElements.Add(storeyElement);
 
 
                                         // IFC Space // Rooms
-                                        List<IfcSpace> spaces = buildingStorey.Extract<IfcSpace>();
+                                        var spaces = buildingStorey.Extract<IfcSpace>();
 
                                         // Check IfcProduct Ids
-                                        List<string> productsIds = new List<string>();
-                                        double productCounter = 0;
+                                        var productsIds = new List<string>();
+                                        var productCounter = 0;
 
                                         // IfcProduct
-                                        List<IfcProduct> products = buildingStorey.Extract<IfcProduct>();
-                                        foreach (IfcProduct product in products)
+                                        var products = buildingStorey.Extract<IfcProduct>();
+                                        foreach (var product in products)
                                         {
-                                            JsonIfcElement newElementProd = new JsonIfcElement();
                                             try
                                             {
                                                 if (product.GlobalId != null)
                                                 {
-                                                    newElementProd.id = product.GlobalId;
-                                                    newElementProd.userData = new JsonIfcUserData();
-                                                    newElementProd.userData.buildingStorey = new string[] { };
-                                                    newElementProd.userData.pset = new Dictionary<string, string>();
-                                                    if (product.Name != null) newElementProd.userData.name = product.Name; // product.LongName;
-                                                    if (product.ObjectType != null) newElementProd.userData.objectType = product.ObjectType;
-                                                    // if (product.Tag != null) newElement.userData.tag = product.Tag;
-                                                    if (product.StepClassName != null) newElementProd.userData.type = product.StepClassName;
-
-                                                    // Environnement element
-                                                    if (projectId != null) newElementProd.userData.projectId = projectId;
-                                                    if (site.GlobalId != null) newElementProd.userData.siteId = site.GlobalId;
-                                                    if (building.GlobalId != null) newElementProd.userData.buildingId = building.GlobalId;
-                                                    List<string> sIds = new List<string>();
-                                                    sIds.Add(storeyElement.id);
-                                                    newElementProd.userData.buildingStorey = sIds.ToArray();
-
-                                                    // Extract pset
-                                                    product.ExtractPset(newElementProd);
-                                                    double spaceCounter = 0;
+                                                    var newElementProd = new JsonProductIfcElement(product, storeyElement, context);
+                                                    var spaceCounter = 0;
 
                                                     // Link to the Space
-                                                    foreach (IfcSpace space in spaces)
+                                                    foreach (var space in spaces)
                                                     {
-
                                                         try
                                                         {
-
                                                             // IfcSpace
                                                             if (space.GlobalId == product.GlobalId)
                                                             {
@@ -334,8 +197,8 @@ namespace ConvertIfc2Json
                                                                                 IfcExtrudedAreaSolid areaSolid = item as IfcExtrudedAreaSolid;
                                                                                 IfcAxis2Placement3D pos = areaSolid.Position;
                                                                                 Point3D loc = new Point3D(pos.Location.Coordinates[0], pos.Location.Coordinates[1], pos.Location.Coordinates[2]);
-                                                                                height = (areaSolid.Depth / SCALE).ToString();
-                                                                                elevation = (buildingStorey.Elevation / SCALE).ToString();
+                                                                                height = (areaSolid.Depth / context.SCALE).ToString();
+                                                                                elevation = (buildingStorey.Elevation / context.SCALE).ToString();
 
                                                                                 if (areaSolid.SweptArea.StepClassName == "IfcArbitraryClosedProfileDef")
                                                                                 { // Polyline
@@ -353,8 +216,8 @@ namespace ConvertIfc2Json
                                                                                                 try
                                                                                                 {
                                                                                                     IList<double> xy = new List<double>();
-                                                                                                    xy.Add(pts[0] / SCALE);
-                                                                                                    xy.Add(pts[1] / SCALE);
+                                                                                                    xy.Add(pts[0] / context.SCALE);
+                                                                                                    xy.Add(pts[1] / context.SCALE);
                                                                                                     polyExt.Add(xy);
                                                                                                 }
                                                                                                 catch (System.Exception exTransf)
@@ -382,8 +245,8 @@ namespace ConvertIfc2Json
                                                                                                     try
                                                                                                     {
                                                                                                         IList<double> xy = new List<double>();
-                                                                                                        xy.Add(pt.Coordinates[0] / SCALE);
-                                                                                                        xy.Add(pt.Coordinates[1] / SCALE);
+                                                                                                        xy.Add(pt.Coordinates[0] / context.SCALE);
+                                                                                                        xy.Add(pt.Coordinates[1] / context.SCALE);
                                                                                                         polyExt.Add(xy);
                                                                                                     }
                                                                                                     catch (System.Exception exTransf)
@@ -401,7 +264,7 @@ namespace ConvertIfc2Json
 
                                                                                     coords.Add(polyExt);
 
-                                                                                    props.Add("location", pos.Location.Coordinates[0] / SCALE + "," + pos.Location.Coordinates[1] / SCALE + "," + pos.Location.Coordinates[2] / SCALE);
+                                                                                    props.Add("location", pos.Location.Coordinates[0] / context.SCALE + "," + pos.Location.Coordinates[1] / context.SCALE + "," + pos.Location.Coordinates[2] / context.SCALE);
                                                                                     if (pos.RefDirection != null) props.Add("refDirection", pos.RefDirection.DirectionRatios[0] + "," + pos.RefDirection.DirectionRatios[1] + "," + pos.RefDirection.DirectionRatios[2]);
                                                                                     if (pos.Axis != null) props.Add("axis", pos.Axis.DirectionRatios[0] + "," + pos.Axis.DirectionRatios[1] + "," + pos.Axis.DirectionRatios[2]);
 
@@ -427,23 +290,23 @@ namespace ConvertIfc2Json
                                                                                                     // Left-Bottom
                                                                                                     IList<double> lb = new List<double>();
                                                                                                     Point3D lbP = new Point3D(lm.X - XDim, lm.Y - YDim, lm.Z);
-                                                                                                    lb.Add(lbP.X / SCALE);
-                                                                                                    lb.Add(lbP.Y / SCALE);
+                                                                                                    lb.Add(lbP.X / context.SCALE);
+                                                                                                    lb.Add(lbP.Y / context.SCALE);
                                                                                                     // right-Bottom
                                                                                                     IList<double> rb = new List<double>();
                                                                                                     Point3D rbP = new Point3D(lm.X + XDim, lm.Y - YDim, lm.Z);
-                                                                                                    rb.Add(rbP.X / SCALE);
-                                                                                                    rb.Add(rbP.Y / SCALE);
+                                                                                                    rb.Add(rbP.X / context.SCALE);
+                                                                                                    rb.Add(rbP.Y / context.SCALE);
                                                                                                     // right-top
                                                                                                     IList<double> rt = new List<double>();
                                                                                                     Point3D rtP = new Point3D(lm.X + XDim, lm.Y + YDim, lm.Z);
-                                                                                                    rt.Add(rtP.X / SCALE);
-                                                                                                    rt.Add(rtP.Y / SCALE);
+                                                                                                    rt.Add(rtP.X / context.SCALE);
+                                                                                                    rt.Add(rtP.Y / context.SCALE);
                                                                                                     // left-top
                                                                                                     IList<double> lt = new List<double>();
                                                                                                     Point3D ltP = new Point3D(lm.X - XDim, lm.Y + YDim, lm.Z);
-                                                                                                    lt.Add(ltP.X / SCALE);
-                                                                                                    lt.Add(ltP.Y / SCALE);
+                                                                                                    lt.Add(ltP.X / context.SCALE);
+                                                                                                    lt.Add(ltP.Y / context.SCALE);
 
                                                                                                     IList<IList<double>> polyExt = new List<IList<double>>();
                                                                                                     polyExt.Add(lb);
@@ -452,7 +315,7 @@ namespace ConvertIfc2Json
                                                                                                     polyExt.Add(lt);
                                                                                                     polyExt.Add(lb);
                                                                                                     coords.Add(polyExt);
-                                                                                                    props.Add("location", pos.Location.Coordinates[0] / SCALE + "," + pos.Location.Coordinates[1] / SCALE + "," + pos.Location.Coordinates[2] / SCALE);
+                                                                                                    props.Add("location", pos.Location.Coordinates[0] / context.SCALE + "," + pos.Location.Coordinates[1] / context.SCALE + "," + pos.Location.Coordinates[2] / context.SCALE);
                                                                                                     if (pos.RefDirection != null) props.Add("refDirection", pos.RefDirection.DirectionRatios[0] + "," + pos.RefDirection.DirectionRatios[1] + "," + pos.RefDirection.DirectionRatios[2]);
                                                                                                     if (pos.Axis != null) props.Add("axis", pos.Axis.DirectionRatios[0] + "," + pos.Axis.DirectionRatios[1] + "," + pos.Axis.DirectionRatios[2]);
 
@@ -486,8 +349,8 @@ namespace ConvertIfc2Json
                                                                                                 try
                                                                                                 {
                                                                                                     IList<double> xy = new List<double>();
-                                                                                                    xy.Add(pts[0] / SCALE);
-                                                                                                    xy.Add(pts[1] / SCALE);
+                                                                                                    xy.Add(pts[0] / context.SCALE);
+                                                                                                    xy.Add(pts[1] / context.SCALE);
                                                                                                     polyExt.Add(xy);
                                                                                                 }
                                                                                                 catch (System.Exception exTransf)
@@ -512,8 +375,8 @@ namespace ConvertIfc2Json
                                                                                                 {
                                                                                                     IList<double> xy = new List<double>();
                                                                                                     Point3D p = new Point3D(pt.Coordinates[0], pt.Coordinates[1], 0);
-                                                                                                    xy.Add(p.X / SCALE);
-                                                                                                    xy.Add(p.Y / SCALE);
+                                                                                                    xy.Add(p.X / context.SCALE);
+                                                                                                    xy.Add(p.Y / context.SCALE);
                                                                                                     polyExt.Add(xy);
                                                                                                 }
                                                                                                 catch (System.Exception exTransf)
@@ -527,7 +390,7 @@ namespace ConvertIfc2Json
 
                                                                                     coords.Add(polyExt);
 
-                                                                                    props.Add("location", pos.Location.Coordinates[0] / SCALE + "," + pos.Location.Coordinates[1] / SCALE + "," + pos.Location.Coordinates[2] / SCALE);
+                                                                                    props.Add("location", pos.Location.Coordinates[0] / context.SCALE + "," + pos.Location.Coordinates[1] / context.SCALE + "," + pos.Location.Coordinates[2] / context.SCALE);
                                                                                     if (pos.RefDirection != null) props.Add("refDirection", pos.RefDirection.DirectionRatios[0] + "," + pos.RefDirection.DirectionRatios[1] + "," + pos.RefDirection.DirectionRatios[2]);
                                                                                     if (pos.Axis != null) props.Add("axis", pos.Axis.DirectionRatios[0] + "," + pos.Axis.DirectionRatios[1] + "," + pos.Axis.DirectionRatios[2]);
 
@@ -541,7 +404,7 @@ namespace ConvertIfc2Json
                                                                                 if (facetedBreps.Count > 0)
                                                                                 {
                                                                                     IfcFacetedBrep facetedBrep = facetedBreps[0];
-                                                                                    elevation = (buildingStorey.Elevation / SCALE).ToString();
+                                                                                    elevation = (buildingStorey.Elevation / context.SCALE).ToString();
                                                                                     if (facetedBrep.Outer.StepClassName == "IfcClosedShell")
                                                                                     {
 
@@ -560,9 +423,9 @@ namespace ConvertIfc2Json
                                                                                                         foreach (IfcCartesianPoint pt in polyLoop.Polygon)
                                                                                                         {
                                                                                                             IList<double> xy = new List<double>();
-                                                                                                            xy.Add(pt.Coordinates[0] / SCALE); //+ loc.X);
-                                                                                                            xy.Add(pt.Coordinates[1] / SCALE); // + loc.Y);
-                                                                                                            xy.Add(pt.Coordinates[2] / SCALE); // + loc.YZ;
+                                                                                                            xy.Add(pt.Coordinates[0] / context.SCALE); //+ loc.X);
+                                                                                                            xy.Add(pt.Coordinates[1] / context.SCALE); // + loc.Y);
+                                                                                                            xy.Add(pt.Coordinates[2] / context.SCALE); // + loc.YZ;
                                                                                                             polyExt.Add(xy);
                                                                                                         }
                                                                                                     }
@@ -581,12 +444,7 @@ namespace ConvertIfc2Json
                                                                                     }
                                                                                 }
 
-
-
-
                                                                             }
-
-
 
                                                                         }
                                                                         catch (System.Exception exRepresentationItem)
@@ -617,7 +475,7 @@ namespace ConvertIfc2Json
                                                                 newElementProd.boundary.properties = props;
                                                                 newElementProd.boundary.geometry = geom;
                                                             }
-                                                            List<IfcBuildingElementProxy> builingElements = space.Extract<IfcBuildingElementProxy>();
+                                                            var builingElements = space.Extract<IfcBuildingElementProxy>();
                                                             // IFC Elements
                                                             foreach (IfcBuildingElementProxy bElement in builingElements)
                                                             {
@@ -642,7 +500,7 @@ namespace ConvertIfc2Json
 
                                                         }
 
-                                                        catch (System.Exception ex)
+                                                        catch (Exception ex)
                                                         {
                                                             Console.WriteLine("16. Element read error" + ex.Message);
                                                             returnMessage = (int)ExitCode.UnknownError;
@@ -670,7 +528,7 @@ namespace ConvertIfc2Json
                                             {
                                                 Console.WriteLine("28. Name read error (product counter: " + productCounter + ") " + exEncode.Message); // returnMessage = (int)ExitCode.NodataIsAvailableForEncoding;
                                             }
-                                            catch (System.Exception ex)
+                                            catch (Exception ex)
                                             {
                                                 Console.WriteLine("29. Element read error" + ex.Message);
                                                 returnMessage = (int)ExitCode.UnknownError;
@@ -683,44 +541,17 @@ namespace ConvertIfc2Json
 
                                         // IFC Elements
 
-                                        List<IfcBuildingElementProxy> elements = buildingStorey.Extract<IfcBuildingElementProxy>();
-
-                                        foreach (IfcBuildingElementProxy element in elements)
+                                        var elements = buildingStorey.Extract<IfcBuildingElementProxy>();
+                                        foreach (IfcBuildingElementProxy element in elements
+                                            .Where(element => element.GlobalId != null && !productsIds.Contains(element.GlobalId)))
                                         {
-                                            JsonIfcElement newElement = new JsonIfcElement();
                                             try
                                             {
-                                                if (element.GlobalId != null && productsIds.Contains(element.GlobalId) == false)
-                                                {
-                                                    newElement.id = element.GlobalId;
-                                                    newElement.userData = new JsonIfcUserData();
-                                                    newElement.userData.buildingStorey = new string[] { };
-                                                    newElement.userData.pset = new Dictionary<string, string>();
-                                                    if (element.Name != null) newElement.userData.name = element.Name;
-                                                    if (element.ObjectType != null) newElement.userData.objectType = element.ObjectType;
-                                                    if (element.Tag != null) newElement.userData.tag = element.Tag;
-                                                    if (element.StepClassName != null) newElement.userData.type = element.StepClassName;
-
-                                                    // Environnement element
-                                                    if (projectId != null) newElement.userData.projectId = projectId;
-                                                    if (site.GlobalId != null) newElement.userData.siteId = site.GlobalId;
-                                                    if (building.GlobalId != null) newElement.userData.buildingId = building.GlobalId;
-                                                    List<string> sIds = new List<string>();
-                                                    sIds.Add(storeyElement.id);
-                                                    newElement.userData.buildingStorey = sIds.ToArray();
-
-
-                                                    // Extract pset
-                                                    element.ExtractPset(newElement);
-
-                                                    // Add to list
-                                                    outputElements.Add(newElement);
-
-
-                                                }
+                                                // Add to list
+                                                outputElements.Add(new JsonBuildingElementProxyIfcElement(element, storeyElement, context));
 
                                             }
-                                            catch (System.Exception ex)
+                                            catch (Exception ex)
                                             {
                                                 Console.WriteLine("17. Element read error" + ex.Message);
                                                 returnMessage = (int)ExitCode.UnknownError;
@@ -731,7 +562,7 @@ namespace ConvertIfc2Json
                                 }
                             }
                         }
-                        catch (System.Exception ex)
+                        catch (Exception ex)
                         {
                             Console.WriteLine("18. Element read error" + ex.Message);
                             returnMessage = (int)ExitCode.UnknownError;
@@ -791,7 +622,7 @@ namespace ConvertIfc2Json
             return returnMessage;
         }
 
-        
+
 
         enum ExitCode : int
         {
@@ -802,70 +633,7 @@ namespace ConvertIfc2Json
             UnknownError = 10,
         }
 
-
-        public class JsonIfcElement
-        {
-            public string id { get; set; }
-            public JsonIfcUserData userData { get; set; }
-            public geoFeature boundary { get; set; }
-        }
-
-        public class JsonIfcUserData
-        {
-            public string name { get; set; }
-            public string type { get; set; }
-            public string objectType { get; set; }
-            public string tag { get; set; }
-            public string projectId { get; set; }
-            public string siteId { get; set; }
-            public string buildingId { get; set; }
-            public string[] buildingStorey { get; set; }
-            public string spaceId { get; set; }
-            public Dictionary<string, string> pset { get; set; }
-            public string location { get; set; }
-            public string refDirection { get; set; }
-            public string axis { get; set; }
-
-
-        }
-
         // GeoJson Export
-        public class GeoFeatureCollection
-        {
-            public string type { get; set; }
-            public object crs { get; set; }
-            public string name { get; set; }
-            public bool exceededTransferLimit { get; set; }
-            public IList<geoFeature> features { get; set; }
-        }
-        public class geoFeature
-        {
-            public string type { get; set; }
-            public string id { get; set; } // Original :  int
-            public geoGeometry geometry { get; set; }
-            public Dictionary<string, string> properties { get; set; }
-        }
-        public class geoGeometry
-        {
-            public string type { get; set; }
-            public object coordinates { get; set; }
-        }
-
-        public class geoPoint
-        {
-            public string type { get; set; }
-            public IList<double> coordinates { get; set; }
-        }
-        public class geoMultiPoint
-        {
-            public string type { get; set; }
-            public IList<IList<double>> coordinates { get; set; }
-        }
-        public class geoMultiLineString
-        {
-            public string type { get; set; }
-            public IList<IList<IList<double>>> coordinates { get; set; }
-        }
     }
 }
 

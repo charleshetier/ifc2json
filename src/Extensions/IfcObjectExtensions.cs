@@ -1,4 +1,5 @@
-﻿using GeometryGym.Ifc;
+﻿using ConvertIfc2Json.Models;
+using GeometryGym.Ifc;
 using System;
 using System.Collections.Generic;
 using System.Linq;
