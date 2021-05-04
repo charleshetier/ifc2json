@@ -32,11 +32,8 @@ namespace ConvertIfc2Json
                     {
                         if (logId != null) Console.WriteLine($"{logId}. Pset write error {e.Message}");
                     }
-
                 }
-
             }
-
         }
 
         public static void ExtractPset(this IfcSite element, JsonIfcElement newElement) => extractPsetBase(element, newElement, logId: "21");

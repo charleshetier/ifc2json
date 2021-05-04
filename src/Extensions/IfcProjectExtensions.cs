@@ -1,5 +1,6 @@
 ﻿using GeometryGym.Ifc;
 using System;
+using System.Collections.Generic;
 using System.Linq;
 
 namespace ConvertIfc2Json

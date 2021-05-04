@@ -37,7 +37,6 @@ namespace ConvertIfc2Json
                     if (arg.ToLower().Trim() == "--full") activeFullJson = true;
                     if (arg.Substring(0, 2) != "--" && pathSource != string.Empty && pathDest == string.Empty) pathDest = arg;
                     if (arg.Substring(0, 2) != "--" && pathSource == string.Empty) pathSource = arg;
-
                 }
 
                 if (readVersion)
@@ -102,8 +101,6 @@ namespace ConvertIfc2Json
                         returnMessage = (int)ExitCode.InvalidFile;
                     }
 
-
-
                     // IFC Site
                     foreach (var site in sites)
                     {
@@ -118,7 +115,7 @@ namespace ConvertIfc2Json
                                 buildings = site.Extract<IfcBuilding>();
                                 foreach (var building in buildings)
                                 {
-                                    var newBuildind = new JsonBuildingIfcElement(building, newSite, context); // REVIEW don't create this unused instance if global id is null
+                                    var newBuildind = new JsonBuildingIfcElement(building, newSite, context); // REVIEW shouldn't create this unused instance if global id is null
                                     if (building.GlobalId != null)
                                     {
                                         outputElements.Add(newBuildind);
@@ -155,6 +152,7 @@ namespace ConvertIfc2Json
                                                     {
                                                         try
                                                         {
+                                                            // REVIEW = LatestOrDefault
                                                             // IfcSpace
                                                             if (space.GlobalId == product.GlobalId)
                                                             {
@@ -477,7 +475,7 @@ namespace ConvertIfc2Json
                                                             }
                                                             var builingElements = space.Extract<IfcBuildingElementProxy>();
                                                             // IFC Elements
-                                                            foreach (IfcBuildingElementProxy bElement in builingElements)
+                                                            foreach (var bElement in builingElements)
                                                             {
                                                                 IfcRelContainedInSpatialStructure productIds = bElement.ContainedInStructure;
                                                                 foreach (IfcProduct pId in productIds.RelatedElements)
